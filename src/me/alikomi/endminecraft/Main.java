@@ -46,7 +46,7 @@ public class Main extends Utils {
         try {
             Attribute qwqre = (new InitialDirContext(hashtable))
                     .getAttributes((new StringBuilder()).append("_Minecraft._tcp.").append(ip).toString(),
-                            new String[] { "SRV" })
+                            new String[]{"SRV"})
                     .get("srv");
             if (qwqre != null) {
                 String[] re = qwqre.get().toString().split(" ", 4);
@@ -56,26 +56,30 @@ public class Main extends Utils {
                 port = Integer.parseInt(re[2]);
                 log("port: " + port);
             }
-        } catch (Exception e) {}
+        } catch (Exception e) {
+        }
         menu.setServer(ip, port);
     }
 
     private static void showMenu() throws IOException, InterruptedException {
         while (true) {
-            log("请输入攻击方式：", "1 : 本地MOTD攻击", "2 : 分布式假人攻击","3 : 分布式MOTD攻击");
+            log("请输入攻击方式：", "1 : 本地MOTD攻击", "2 : 分布式假人攻击", "3 : 分布式MOTD攻击", "4 : 分布式影分身攻击");
             log("========================");
             switch (getCo(scanner.nextLine(), 2)) {
-            case 1:
-                menu._1();
-                return;
-            case 2:
-                menu._2();
-                return;
-            case 3:
-                menu._3();
-                return;
-            default:
-                log("您的选择有误，请重新选择");
+                case 1:
+                    menu._1();
+                    return;
+                case 2:
+                    menu._2();
+                    return;
+                case 3:
+                    menu._3();
+                    return;
+                case 4:
+                    menu._4();
+                    return;
+                default:
+                    log("您的选择有误，请重新选择");
             }
         }
     }

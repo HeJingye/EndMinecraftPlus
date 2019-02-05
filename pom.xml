@@ -20,7 +20,7 @@
       <dependency>
           <groupId>javassist</groupId>
           <artifactId>javassist</artifactId>
-        <scope>system</scope>  
+          <scope>system</scope>
           <systemPath>${project.basedir}/lib/javassist-3.22.0-CR2.jar</systemPath>
           <version>3.22.0-CR2</version>
       </dependency>

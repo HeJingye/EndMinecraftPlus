@@ -3,26 +3,22 @@ package luohuayu.EndMinecraftPlus.tasks.attack;
 import java.util.Map;
 
 public abstract class IAttack {
-    public int attack_mode;
+    public String ip;
+    public int port;
+
     public int attack_time;
     public int attack_maxconnect;
     public int attack_joinsleep;
-    public boolean attack_motdbefore;
-    public boolean attack_tab;
 
-    public Map<String, String> modList;
-
-    public IAttack(int time, int maxconnect, int joinsleep, boolean motdbefore, boolean tab,
-            Map<String, String> modList) {
+    public IAttack(String ip, int port, int time, int maxconnect, int joinsleep) {
+        this.ip = ip;
+        this.port = port;
         this.attack_time = time;
         this.attack_maxconnect = maxconnect;
         this.attack_joinsleep = joinsleep;
-        this.attack_motdbefore = motdbefore;
-        this.attack_tab = tab;
-        this.modList = modList;
     }
 
-    public abstract void start(String ip, int port);
+    public abstract void start();
 
     public abstract void stop();
 }

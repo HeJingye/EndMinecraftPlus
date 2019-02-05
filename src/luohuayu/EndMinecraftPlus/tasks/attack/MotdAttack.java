@@ -13,12 +13,11 @@ import luohuayu.EndMinecraftPlus.Utils;
 public class MotdAttack extends IAttack {
     public List<Thread> threads = new ArrayList<Thread>();
 
-    public MotdAttack(int time, int maxconnect, int joinsleep, boolean motdbefore, boolean tab,
-            Map<String, String> modList) {
-        super(time, maxconnect, joinsleep, motdbefore, tab, modList);
+    public MotdAttack(String ip, int port, int time, int maxconnect, int joinsleep) {
+        super(ip, port, time, maxconnect, joinsleep);
     }
 
-    public void start(final String ip, final int port) {
+    public void start() {
         Runnable task = () -> {
             while (true) {
                 try {

